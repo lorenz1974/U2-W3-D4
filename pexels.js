@@ -6,6 +6,8 @@
 
 // esegue il fect delle API
 const getApiItems = (fetchUrl) => {
+    _D(1, `fetching: ${fetchUrl}`)
+
     return fetch(fetchUrl, {
         method: 'GET',
         headers: new Headers({
@@ -32,10 +34,10 @@ const getApiItems = (fetchUrl) => {
 }
 
 // Disegna l'albim delle foto
-const drawAlbum = () => {
+const drawAlbum = (htmReturn) => {
 
     // Svuoto l'album
-    cardsDiv.innerHTML = ''
+    !htmReturn ? document.getElementById('cardsDiv').innerHTML = '' : {}
 
     // Eseguo il loop sullì'array delel card
     apiItemsArray.photos.forEach((apiItem) => {
@@ -53,9 +55,9 @@ const drawAlbum = () => {
                         data-bs-toggle="modal" data-bs-target="#imageModal"
                     />
                     <div class="card-body">
-                        <h5 class="card-title">Lorem Ipsum</h5>
+                        <h5 class="card-title">${apiItem.alt}</h5>
                         <p class="card-text">
-                            ${apiItem.alt}.
+                            <!-- none -->
                         </p>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="btn-group">
@@ -84,7 +86,8 @@ const drawAlbum = () => {
                 `
 
         _D(3, `card HTML: ${newCol.innerHTML}`)
-        cardsDiv.appendChild(newCol)
+
+        document.getElementById('cardsDiv').appendChild(newCol)
     })
 }
 
@@ -96,29 +99,35 @@ const removeCard = (id) => {
     document.getElementById(`card-${id}`).parentElement.classList.add('d-none')
 }
 
-const drawModal = (modalId) => {
+
+// Funzione che costruisce il body del modale
+const drawModal = async (modalId) => {
     const item = apiItemsArray.photos.find((item) => item.id === parseInt(modalId));
     _W(item);
 
+    const photoArray = await getApiItems(apiBaseUrl + '/photos/' + modalId)
+    _D(3, photoArray, 'apiItemsArray')
+
+
     // Setto il titolo
-    document.getElementById('modalTitle').innerHTML = `${item.alt}`
+    document.getElementById('modalTitle').innerHTML = `${photoArray.alt}`
 
     // Setto il body del modale
     document.getElementById('modalBody').innerHTML = `
-        <img src="${item.src.medium}" class="img-fluid">
+        <img src="${photoArray.src.medium}" class="img-fluid">
         <div class="w-50 mx-auto mt-2">
             <p class="m-0 p-0"><span class="fw-bold">Photo Id</span>:</p>
-            <p> ${item.id}</p>
+            <p> ${photoArray.id}</p>
             <p class="m-0 p-0"><span class="fw-bold">Width / Heigth</span>:</p>
-            <p>${item.width} / ${item.heigth}</p>
+            <p>${photoArray.width} / ${photoArray.height}</p>
             <p class="m-0 p-0"><span class="fw-bold">Photographer</span>:</p>
-            <p>${item.photographer}</p>
+            <p>${photoArray.photographer}</p>
             <p class="m-0 p-0"><span class="fw-bold">Photographer site</span>:</p>
-            <p><a href="${item.photographer_url}" target="_blank">${item.photographer_url}</a></p>
+            <p><a href="${photoArray.photographer_url}" target="_blank">${photoArray.photographer_url}</a></p>
         </div>
     `;
 
-    document.getElementById('imageModal').style.backgroundColor = item.avg_color
+    document.getElementById('imageModal').style.backgroundColor = photoArray.avg_color
 };
 
 
@@ -130,11 +139,12 @@ const drawModal = (modalId) => {
 // ***********************************************************************
 //
 
-const debugLevel = 3
+const debugLevel = 1
 const apiKey = 'zv3jJj8PimQmSYA0fIqTxg2bj1sG4Yea4V5An70QB3DEcYF57frzB7S5'
-const apiBaseUrl = 'https://api.pexels.com/v1/search?query='
+const apiBaseUrl = 'https://api.pexels.com/v1'
 const photoCardResolution = 'medium' // small, tiny, large, portrait, ....
 let apiItemsArray = {}
+let fecthPage = 2
 
 
 //
@@ -154,7 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     _D(1, `searchTerms: ${searchTerms}`)
 
     // Eseguo il fetch
-    apiItemsArray = await getApiItems(apiBaseUrl + (searchTerms ? searchTerms : '123'))
+    apiItemsArray = await getApiItems(apiBaseUrl + '/search?query=' + (searchTerms ? searchTerms : '123'))
     _D(3, apiItemsArray, 'apiItemsArray')
 
     // Disegno l'album di immafini
@@ -196,5 +206,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         location.href = `./pexels-start.html?q=${document.getElementById('searchInput').value}`
 
     })
+
+    // Attivazione dell'evento dell'inifiite scroll
+    let isFetching = false;
+
+    window.addEventListener("scroll", async function () {
+        // Evita di fare richieste multiple
+        if (isFetching) return;
+
+        const scrollTop = window.scrollY;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+
+        const scrollPercent = (scrollTop + windowHeight) / documentHeight * 100;
+
+        // Lo scroll si ferma a 10 pagine
+        if (scrollPercent >= 75 && fecthPage < 10) {
+            isFetching = true; // Blocca altre chiamate
+
+            _W('75% reached!');
+            const urlSearchParameters = new URLSearchParams(window.location.search);
+            const searchTerms = urlSearchParameters.get('q');
+
+            fecthPage++;
+            try {
+                apiItemsArray = await getApiItems(
+                    `${apiBaseUrl}/search?page=${fecthPage}&query=${searchTerms || '123'}`
+                );
+                _D(3, apiItemsArray, 'apiItemsArray');
+                _D(1, `fecthPage: ${fecthPage}`);
+                drawAlbum(true);
+            } catch (error) {
+                console.error("Errore durante il fetch:", error);
+            }
+
+            isFetching = false; // Sblocca le chiamate
+        }
+    });
 
 })
